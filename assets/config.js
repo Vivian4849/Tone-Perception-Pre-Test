@@ -2,26 +2,6 @@
    Mandarin Tone Perception Test — CONFIGURATION
    ----------------------------------------------------------------------------
    Everything you normally need to change lives in this one file.
-
-   HOW TO FILL IN AN ITEM
-       { audio: "audio/p1.mp3", answer: 2 }
-
-       audio   Path to the sound file, relative to the HTML file
-               (e.g. "audio/p1.mp3"), or a full https:// URL.
-               Leave "" if you prefer to load the files at run time from the
-               "Setup (teacher only)" panel on the start screen
-               (multi-select files, or pick a whole folder — items are filled
-               in the order the filenames sort: 1, 2, 3 ... 10, 11).
-
-       answer  1 / 2 / 3 / 4  = the correct tone.
-               0  = answer key not entered yet. The item still runs and the
-                    response is still recorded, but it is reported as
-                    "Not scored" instead of correct / incorrect.
-
-   HOW MANY ITEMS
-       Add or delete lines freely. The number of items is whatever is in the
-       list — the page adapts automatically. pilot and main are independent,
-       so the pilot can be short (5) while the main test is long (20+).
    ========================================================================== */
 
 const SETTINGS = {
@@ -40,29 +20,62 @@ const SETTINGS = {
 const AUDIO_CONFIG = {
 
   /* --------------------------------------------------------------------
-     PILOT TEST  (预测试)
+     PILOT TEST  (预测试: 8题) - 答案为两位数组合 (例如 34 代表 T3T4)
      -------------------------------------------------------------------- */
   pilot: [
-    { audio: "", answer: 0 },   // Q1
-    { audio: "", answer: 0 },   // Q2
-    { audio: "", answer: 0 },   // Q3
-    { audio: "", answer: 0 },   // Q4
-    { audio: "", answer: 0 }    // Q5
+    { audio: "audio/Perception_Pilot%20(1).mp3", answer: 34 },   
+    { audio: "audio/Perception_Pilot%20(2).mp3", answer: 42 },
+    { audio: "audio/Perception_Pilot%20(3).mp3", answer: 24 },
+    { audio: "audio/Perception_Pilot%20(4).mp3", answer: 12 },
+    { audio: "audio/Perception_Pilot%20(5).mp3", answer: 13 },
+    { audio: "audio/Perception_Pilot%20(6).mp3", answer: 41 },
+    { audio: "audio/Perception_Pilot%20(7).mp3", answer: 23 },
+    { audio: "audio/Perception_Pilot%20(8).mp3", answer: 31 }
   ],
 
   /* --------------------------------------------------------------------
-     MAIN TEST  (正式测试)
+     MAIN TEST  (正式测试: 40题)
      -------------------------------------------------------------------- */
   main: [
-    { audio: "", answer: 0 },   // Q1
-    { audio: "", answer: 0 },   // Q2
-    { audio: "", answer: 0 },   // Q3
-    { audio: "", answer: 0 },   // Q4
-    { audio: "", answer: 0 },   // Q5
-    { audio: "", answer: 0 },   // Q6
-    { audio: "", answer: 0 },   // Q7
-    { audio: "", answer: 0 },   // Q8
-    { audio: "", answer: 0 },   // Q9
-    { audio: "", answer: 0 }    // Q10
+    { audio: "audio/Perception_Pre%20(1).mp3", answer: 42 },
+    { audio: "audio/Perception_Pre%20(2).mp3", answer: 21 },
+    { audio: "audio/Perception_Pre%20(3).mp3", answer: 33 },
+    { audio: "audio/Perception_Pre%20(4).mp3", answer: 43 },
+    { audio: "audio/Perception_Pre%20(5).mp3", answer: 43 },
+    { audio: "audio/Perception_Pre%20(6).mp3", answer: 34 },
+    { audio: "audio/Perception_Pre%20(7).mp3", answer: 32 },
+    { audio: "audio/Perception_Pre%20(8).mp3", answer: 22 },
+    { audio: "audio/Perception_Pre%20(9).mp3", answer: 33 },
+    { audio: "audio/Perception_Pre%20(10).mp3", answer: 13 },
+    { audio: "audio/Perception_Pre%20(11).mp3", answer: 34 },
+    { audio: "audio/Perception_Pre%20(12).mp3", answer: 44 },
+    { audio: "audio/Perception_Pre%20(13).mp3", answer: 12 },
+    { audio: "audio/Perception_Pre%20(14).mp3", answer: 31 },
+    { audio: "audio/Perception_Pre%20(15).mp3", answer: 33 },
+    { audio: "audio/Perception_Pre%20(16).mp3", answer: 23 },
+    { audio: "audio/Perception_Pre%20(17).mp3", answer: 12 },
+    { audio: "audio/Perception_Pre%20(18).mp3", answer: 12 },
+    { audio: "audio/Perception_Pre%20(19).mp3", answer: 22 },
+    { audio: "audio/Perception_Pre%20(20).mp3", answer: 24 },
+    { audio: "audio/Perception_Pre%20(21).mp3", answer: 24 },
+    { audio: "audio/Perception_Pre%20(22).mp3", answer: 43 },
+    { audio: "audio/Perception_Pre%20(23).mp3", answer: 14 },
+    { audio: "audio/Perception_Pre%20(24).mp3", answer: 11 },
+    { audio: "audio/Perception_Pre%20(25).mp3", answer: 22 },
+    { audio: "audio/Perception_Pre%20(26).mp3", answer: 44 },
+    { audio: "audio/Perception_Pre%20(27).mp3", answer: 11 },
+    { audio: "audio/Perception_Pre%20(28).mp3", answer: 41 },
+    { audio: "audio/Perception_Pre%20(29).mp3", answer: 13 },
+    { audio: "audio/Perception_Pre%20(30).mp3", answer: 44 },
+    { audio: "audio/Perception_Pre%20(31).mp3", answer: 21 },
+    { audio: "audio/Perception_Pre%20(32).mp3", answer: 14 },
+    { audio: "audio/Perception_Pre%20(33).mp3", answer: 11 },
+    { audio: "audio/Perception_Pre%20(34).mp3", answer: 41 },
+    { audio: "audio/Perception_Pre%20(35).mp3", answer: 23 },
+    { audio: "audio/Perception_Pre%20(36).mp3", answer: 31 },
+    { audio: "audio/Perception_Pre%20(37).mp3", answer: 32 },
+    { audio: "audio/Perception_Pre%20(38).mp3", answer: 42 },
+    { audio: "audio/Perception_Pre%20(39).mp3", answer: 34 },
+    { audio: "audio/Perception_Pre%20(40).mp3", answer: 21 }
   ]
 };

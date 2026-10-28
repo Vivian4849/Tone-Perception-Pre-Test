@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mandarin Tone Perception Test</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%2317171a%27/%3E%3Ctext x=%2716%27 y=%2723%27 font-size=%2719%27 text-anchor=%27middle%27 fill=%27%23fdfcf8%27 font-family=%27serif%27%3E%E5%A3%B0%3C/text%3E%3C/svg%3E" />
+<link rel="stylesheet" href="assets/styles.css" />
+</head>
+<body data-test-type="main">
+
+<header class="topbar">
+  <div class="brand">
+    <span class="brand-mark">声</span>
+    <div>
+      <h1>Mandarin Tone Perception Test</h1>
+      <p class="brand-sub">Listening &amp; identification</p>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="launcher-head">
+    <h2>Choose a session</h2>
+    <p class="lead">Two independent tests with separate item lists, answer keys and CSV exports.</p>
+  </div>
+
+  <div class="launch-grid">
+    <a class="launch-card is-pilot" href="pilot.html">
+      <span class="tag tag-neutral">Pre-test</span>
+      <h3>Pilot Test</h3>
+      <p>A short run-through to check the audio, the equipment and the task itself.</p>
+      <span class="go">Open Pilot Test &#8594;</span>
+    </a>
+
+    <a class="launch-card is-main" href="main.html">
+      <span class="tag tag-neutral">Formal</span>
+      <h3>Main Test</h3>
+      <p>The full listening test. Responses are scored and exported per student.</p>
+      <span class="go">Open Main Test &#8594;</span>
+    </a>
+  </div>
+
+  <div class="card" style="margin-top: 22px;">
+    <p class="eyebrow">How to set it up</p>
+    <h2 style="font-size: 22px;">Three things to fill in</h2>
+    <ul class="rules" style="margin-bottom: 0;">
+      <li><span class="rule-icon">1</span> <strong>Audio</strong> — either paste file paths (<code>audio/q1.mp3</code>) into <code>assets/config.js</code>, or load the files at runtime from the “Setup (teacher only)” panel on each test page.</li>
+      <li><span class="rule-icon">2</span> <strong>Answer key</strong> — the tone number for every item, in <code>assets/config.js</code> or in the same setup panel.</li>
+      <li><span class="rule-icon">3</span> <strong>Collection</strong> — paste your Google Apps Script Web App URL into <code>ENDPOINT</code> at the top of <code>assets/app.js</code>. Until then, every submission is saved as a CSV.</li>
+    </ul>
+  </div>
+</main>
+
+<footer class="foot">
+  <span>Mandarin Tone Perception Test</span>
+  <span>CSV · JSON POST · no build step</span>
+</footer>
+
+</body>
+</html>

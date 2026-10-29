@@ -38,6 +38,7 @@
     </ul>
 
     <form id="startForm" class="form" novalidate>
+      <p class="session-chip" id="sessionChip" hidden></p>
       <div class="field">
         <label for="nameInput">Student Name <span class="req">*</span></label>
         <input id="nameInput" name="studentName" type="text" autocomplete="name" required placeholder="Family name + given name" />
@@ -45,6 +46,24 @@
       <div class="field">
         <label for="majorInput">Major <span class="req">*</span></label>
         <input id="majorInput" name="major" type="text" autocomplete="off" required placeholder="e.g. Teaching Chinese as a Foreign Language" />
+      </div>
+      <div class="field">
+        <label for="listenSelect">Listening device <span class="req">*</span></label>
+        <select id="listenSelect" name="listenDevice" required>
+          <option value="">Select your earphones / speaker</option>
+          <option>Bluetooth earphones</option>
+          <option>Wired earphones</option>
+          <option>Phone speaker</option>
+          <option>Computer speaker</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="answerSelect">Answering device <span class="req">*</span></label>
+        <select id="answerSelect" name="answerDevice" required>
+          <option value="">Select your device</option>
+          <option>Phone</option>
+          <option>Computer</option>
+        </select>
       </div>
       <p class="form-error" id="formError" role="alert" hidden></p>
       <div>
@@ -67,19 +86,47 @@
   var form = document.getElementById("startForm");
   var nameInput = document.getElementById("nameInput");
   var majorInput = document.getElementById("majorInput");
+  var listenSelect = document.getElementById("listenSelect");
+  var answerSelect = document.getElementById("answerSelect");
+  var sessionChip = document.getElementById("sessionChip");
   var error = document.getElementById("formError");
   var startBtn = document.getElementById("startBtn");
+
+  /* ?session=2 on the link decides which group this run belongs to.
+     Three groups, three links — the only difference is the ending. */
+  var session = "";
+  try {
+    var m = String(window.location.search || "").match(/[?&]session=([^&]+)/);
+    if (m) session = decodeURIComponent(m[1]).replace(/\+/g, " ").trim();
+  } catch (err) { session = ""; }
+  if (!session) session = "1";
+
+  if (sessionChip) {
+    sessionChip.hidden = false;
+    sessionChip.textContent = "Session " + session;
+  }
+
+  // Pre-select the likely answering device, still changeable.
+  try {
+    var isPhone = /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+    answerSelect.value = isPhone ? "Phone" : "Computer";
+  } catch (err) { /* leave blank */ }
 
   try {
     var saved = JSON.parse(sessionStorage.getItem("ttp.student") || "null");
     if (saved && saved.name && saved.major) {
       nameInput.value = saved.name;
       majorInput.value = saved.major;
+      if (saved.listen) listenSelect.value = saved.listen;
+      if (saved.answer) answerSelect.value = saved.answer;
     }
   } catch (err) { /* first visit */ }
 
-  [nameInput, majorInput].forEach(function (input) {
+  [nameInput, majorInput, listenSelect, answerSelect].forEach(function (input) {
     input.addEventListener("input", function () {
+      if (!error.hidden) error.hidden = true;
+    });
+    input.addEventListener("change", function () {
       if (!error.hidden) error.hidden = true;
     });
   });
@@ -89,20 +136,37 @@
 
     var name = nameInput.value.trim();
     var major = majorInput.value.trim();
+    var listen = listenSelect.value;
+    var answer = answerSelect.value;
 
-    if (!name || !major) {
+    if (!name || !major || !listen || !answer) {
       error.hidden = false;
-      error.textContent = "Please fill in both Student Name and Major before starting.";
-      (!name ? nameInput : majorInput).focus();
+      if (!name || !major) {
+        error.textContent = "Please fill in both Student Name and Major before starting.";
+        (!name ? nameInput : majorInput).focus();
+      } else if (!listen) {
+        error.textContent = "Please choose what you are listening with.";
+        listenSelect.focus();
+      } else {
+        error.textContent = "Please choose the device you are answering on.";
+        answerSelect.focus();
+      }
       return;
     }
 
     try {
-      sessionStorage.setItem("ttp.student", JSON.stringify({ name: name, major: major }));
+      sessionStorage.setItem("ttp.student", JSON.stringify({
+        name: name, major: major, listen: listen, answer: answer
+      }));
     } catch (err) { /* storage blocked — the URL still carries the values */ }
 
     startBtn.disabled = true;
-    var q = "?name=" + encodeURIComponent(name) + "&major=" + encodeURIComponent(major) + "&from=entry";
+    var q = "?name=" + encodeURIComponent(name) +
+      "&major=" + encodeURIComponent(major) +
+      "&session=" + encodeURIComponent(session) +
+      "&listen=" + encodeURIComponent(listen) +
+      "&answer=" + encodeURIComponent(answer) +
+      "&from=entry";
     window.location.href = "pilot.html" + q;
   });
 })();

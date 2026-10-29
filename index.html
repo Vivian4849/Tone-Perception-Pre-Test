@@ -7,7 +7,7 @@
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27%3E%3Crect width=%2732%27 height=%2732%27 rx=%277%27 fill=%27%2317171a%27/%3E%3Ctext x=%2716%27 y=%2723%27 font-size=%2719%27 text-anchor=%27middle%27 fill=%27%23fdfcf8%27 font-family=%27serif%27%3E%E5%A3%B0%3C/text%3E%3C/svg%3E" />
 <link rel="stylesheet" href="assets/styles.css" />
 </head>
-<body data-test-type="main">
+<body data-test-type="entry">
 
 <header class="topbar">
   <div class="brand">
@@ -20,42 +20,92 @@
 </header>
 
 <main class="wrap">
-  <div class="launcher-head">
-    <h2>Choose a session</h2>
-    <p class="lead">Two independent tests with separate item lists, answer keys and CSV exports.</p>
-  </div>
 
-  <div class="launch-grid">
-    <a class="launch-card is-pilot" href="pilot.html">
-      <span class="tag tag-neutral">Pre-test</span>
-      <h3>Pilot Test</h3>
-      <p>A short run-through to check the audio, the equipment and the task itself.</p>
-      <span class="go">Open Pilot Test &#8594;</span>
-    </a>
+  <section class="card entry-card">
+    <p class="eyebrow">Listening test</p>
+    <h2>Identify the tones you hear</h2>
+    <p class="lead">You will hear short Mandarin syllables. For every item, two syllables are played &mdash; choose the tone of each one. You may play each sound up to twice.</p>
 
-    <a class="launch-card is-main" href="main.html">
-      <span class="tag tag-neutral">Formal</span>
-      <h3>Main Test</h3>
-      <p>The full listening test. Responses are scored and exported per student.</p>
-      <span class="go">Open Main Test &#8594;</span>
-    </a>
-  </div>
+    <ol class="steps">
+      <li><span class="step-num">1</span><span class="step-text"><strong>Pilot Test</strong> &mdash; a short warm-up</span></li>
+      <li><span class="step-num">2</span><span class="step-text"><strong>Main Test</strong> &mdash; starts automatically when the pilot is submitted</span></li>
+    </ol>
 
-  <div class="card" style="margin-top: 22px;">
-    <p class="eyebrow">How to set it up</p>
-    <h2 style="font-size: 22px;">Three things to fill in</h2>
-    <ul class="rules" style="margin-bottom: 0;">
-      <li><span class="rule-icon">1</span> <strong>Audio</strong> — either paste file paths (<code>audio/q1.mp3</code>) into <code>assets/config.js</code>, or load the files at runtime from the “Setup (teacher only)” panel on each test page.</li>
-      <li><span class="rule-icon">2</span> <strong>Answer key</strong> — the tone number for every item, in <code>assets/config.js</code> or in the same setup panel.</li>
-      <li><span class="rule-icon">3</span> <strong>Collection</strong> — paste your Google Apps Script Web App URL into <code>ENDPOINT</code> at the top of <code>assets/app.js</code>. Until then, every submission is saved as a CSV.</li>
+    <ul class="rules">
+      <li><span class="rule-icon">1</span> Each item has <strong>two syllables</strong>: pick a tone for Syllable 1 and one for Syllable 2.</li>
+      <li><span class="rule-icon">2</span> The four tones: <strong>1 <span class="tone-mark" aria-hidden="true"><svg viewBox="0 0 40 34"><path d="M5 17H35"/></svg></span></strong> high level, <strong>2 <span class="tone-mark" aria-hidden="true"><svg viewBox="0 0 40 34"><path d="M6 28L34 6"/></svg></span></strong> rising, <strong>3 <span class="tone-mark" aria-hidden="true"><svg viewBox="0 0 40 34"><path d="M6 6Q20 38 34 6"/></svg></span></strong> dipping, <strong>4 <span class="tone-mark" aria-hidden="true"><svg viewBox="0 0 40 34"><path d="M6 6L34 28"/></svg></span></strong> falling.</li>
+      <li><span class="rule-icon">3</span> Each sound can be played <strong>twice at most</strong>. Going back does not reset the count.</li>
     </ul>
-  </div>
+
+    <form id="startForm" class="form" novalidate>
+      <div class="field">
+        <label for="nameInput">Student Name <span class="req">*</span></label>
+        <input id="nameInput" name="studentName" type="text" autocomplete="name" required placeholder="Family name + given name" />
+      </div>
+      <div class="field">
+        <label for="majorInput">Major <span class="req">*</span></label>
+        <input id="majorInput" name="major" type="text" autocomplete="off" required placeholder="e.g. Teaching Chinese as a Foreign Language" />
+      </div>
+      <p class="form-error" id="formError" role="alert" hidden></p>
+      <div>
+        <button class="btn btn-primary btn-lg" id="startBtn" type="submit">Start the test</button>
+      </div>
+    </form>
+  </section>
+
 </main>
 
 <footer class="foot">
   <span>Mandarin Tone Perception Test</span>
-  <span>CSV · JSON POST · no build step</span>
+  <span>Pilot Test &rarr; Main Test</span>
 </footer>
 
+<script>
+(function () {
+  "use strict";
+
+  var form = document.getElementById("startForm");
+  var nameInput = document.getElementById("nameInput");
+  var majorInput = document.getElementById("majorInput");
+  var error = document.getElementById("formError");
+  var startBtn = document.getElementById("startBtn");
+
+  try {
+    var saved = JSON.parse(sessionStorage.getItem("ttp.student") || "null");
+    if (saved && saved.name && saved.major) {
+      nameInput.value = saved.name;
+      majorInput.value = saved.major;
+    }
+  } catch (err) { /* first visit */ }
+
+  [nameInput, majorInput].forEach(function (input) {
+    input.addEventListener("input", function () {
+      if (!error.hidden) error.hidden = true;
+    });
+  });
+
+  form.addEventListener("submit", function (e) {
+    e.preventDefault();
+
+    var name = nameInput.value.trim();
+    var major = majorInput.value.trim();
+
+    if (!name || !major) {
+      error.hidden = false;
+      error.textContent = "Please fill in both Student Name and Major before starting.";
+      (!name ? nameInput : majorInput).focus();
+      return;
+    }
+
+    try {
+      sessionStorage.setItem("ttp.student", JSON.stringify({ name: name, major: major }));
+    } catch (err) { /* storage blocked — the URL still carries the values */ }
+
+    startBtn.disabled = true;
+    var q = "?name=" + encodeURIComponent(name) + "&major=" + encodeURIComponent(major) + "&from=entry";
+    window.location.href = "pilot.html" + q;
+  });
+})();
+</script>
 </body>
 </html>

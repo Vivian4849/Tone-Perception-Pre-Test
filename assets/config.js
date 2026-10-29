@@ -2,7 +2,13 @@
    Mandarin Tone Perception Test — CONFIGURATION
    ----------------------------------------------------------------------------
    Everything you normally need to change lives in this one file.
+
+   STEP 0 — paste your Apps Script Web App URL between the quotes below.
+   It is the link that ends in /exec and answers {"ok":true,"version":7,...}
+   Leave it "" and the page skips the upload (the CSV download still works).
    ========================================================================== */
+
+window.TONE_TEST_ENDPOINT = "";
 
 const SETTINGS = {
   /* How many times a single item may be replayed. */

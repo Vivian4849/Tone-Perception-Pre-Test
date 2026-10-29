@@ -11,16 +11,41 @@
   "use strict";
 
   /* ==========================================================================
-     [1]  GOOGLE APPS SCRIPT ENDPOINT   <-- THE PLACE YOU PASTE YOUR URL
+     [1]  GOOGLE APPS SCRIPT ENDPOINT
      --------------------------------------------------------------------------
-     Paste the Web App URL of your Apps Script between the quotes, e.g.
+     Two ways to set it — pick ONE:
 
-         const ENDPOINT = "https://script.google.com/macros/s/AKfy.../exec";
+     (a) RECOMMENDED — put it in assets/config.js, so you never touch this file:
 
-     Leave it as "" and the page simply skips the network call — the CSV
+             window.TONE_TEST_ENDPOINT = "https://script.google.com/macros/s/AKfy.../exec";
+
+     (b) or paste it below between the quotes.
+
+     Leave both empty and the page simply skips the network call — the CSV
      download keeps working, so nothing breaks before you are ready.
      ========================================================================== */
-  const ENDPOINT = "https://script.google.com/macros/s/AKfycbzEnGUaZqxQP-zJGYppXOWB8vFpe3ltPvW9LSM6cEX4OS7p8TP2xlt7deLSNHz2XstvzA/exec";
+  const ENDPOINT_INLINE = "";
+
+  const ENDPOINT = (function () {
+    const inline = String(ENDPOINT_INLINE || "").trim();
+    if (inline) return inline;
+    try {
+      const fromConfig = (typeof window !== "undefined" && window.TONE_TEST_ENDPOINT)
+        ? String(window.TONE_TEST_ENDPOINT).trim()
+        : "";
+      return fromConfig || "";
+    } catch (err) {
+      return "";
+    }
+  })();
+
+  /* Shown only when an upload fails, so a screenshot tells us which build ran. */
+  const BUILD = "v2.3-2026-10-29";
+
+  function endpointHost() {
+    if (!ENDPOINT) return "(none)";
+    try { return new URL(ENDPOINT).host; } catch (err) { return ENDPOINT.slice(0, 60); }
+  }
 
   /* ==========================================================================
      [2]  Test definition (read from assets/config.js)
@@ -84,6 +109,8 @@
     audio: null,
     submitted: false,
     postSettled: false,
+    postOk: null,
+    settledAt: 0,
     advTimer: null
   };
 
@@ -93,6 +120,31 @@
   /* ==========================================================================
      [4]  Boot
      ========================================================================== */
+  // If the previous section failed to upload, say so on this page instead of
+  // letting it disappear with the page the student already left.
+  function showUploadBanner() {
+    let info = null;
+    try {
+      const raw = sessionStorage.getItem("tpUploadFailed");
+      if (!raw) return;
+      sessionStorage.removeItem("tpUploadFailed");
+      info = JSON.parse(raw);
+    } catch (e) { return; }
+    if (!info) return;
+
+    const bar = document.createElement("div");
+    bar.setAttribute("role", "alert");
+    bar.style.cssText = "margin:0 0 18px;padding:12px 16px;border:1px solid #e2b1aa;" +
+      "border-left:4px solid #b4231a;border-radius:10px;background:#fdf1ef;color:#8a1b12;" +
+      "font-size:13.5px;line-height:1.55";
+    const which = info.test === "pilot" ? "Pilot" : "Main";
+    bar.textContent = "Heads-up: the " + which + " results could not be uploaded to the spreadsheet (" +
+      info.message + "). The CSV file on this computer is complete \u2014 please tell the researcher before continuing.";
+
+    const host = document.querySelector(".card") || document.body;
+    host.insertBefore(bar, host.firstChild);
+  }
+
   function boot() {
     els.screens = {
       start: $("screen-start"),
@@ -123,6 +175,7 @@
     els.keyInput = $("keyInput");
     els.keyStatus = $("keyStatus");
     els.applyKey = $("applyKey");
+    showUploadBanner();
     els.clearKey = $("clearKey");
 
     els.doneName = $("doneName");
@@ -932,8 +985,10 @@
       startAdvance();
     }
 
-    postResults(buildPayload()).then(function () {
+    postResults(buildPayload()).then(function (result) {
       state.postSettled = true;
+      state.postOk = !!(result && result.ok);
+      state.settledAt = Date.now();
 
       if (els.nextNowBtn) {
         els.nextNowBtn.disabled = false;
@@ -960,13 +1015,22 @@
       if (els.countdown) {
         els.countdown.textContent = left > 0
           ? left + " s"
-          : (state.postSettled ? "now" : "sending\u2026");
+          : (state.postSettled ? (state.postOk === false ? "error" : "now") : "sending\u2026");
       }
 
-      // Never leave before the POST has settled, but do not hang for ever.
-      const ready = state.postSettled ? (elapsed >= ADVANCE_MS)
-                                      : (elapsed >= ADVANCE_MS + 12000);
-      if (ready) {
+      // Success: leave as soon as the countdown ends.
+      // Failure: wait until the red line has been readable for a few seconds.
+      // Still sending: hard cap, so nobody is stuck on a dead server.
+      let go;
+      if (state.postSettled === false) {
+        go = elapsed >= ADVANCE_MS + 24000;
+      } else if (state.postOk) {
+        go = elapsed >= ADVANCE_MS;
+      } else {
+        go = elapsed >= ADVANCE_MS && (Date.now() - state.settledAt) >= 4000;
+      }
+
+      if (go) {
         clearInterval(state.advTimer);
         state.advTimer = null;
         goNext();
@@ -1182,8 +1246,21 @@
       scoredItems: s.scoredTotal,
       correctCount: s.correctCount,
       scorePercent: s.percent,
+      subId: newSubId(),
       responses: s.rows
     };
+  }
+
+  // One id per submission, reused by the background retry so the server can
+  // drop the second copy instead of writing every row twice.
+  let pendingSubId = "";
+  function newSubId() {
+    if (pendingSubId) return pendingSubId;
+    try {
+      if (typeof crypto !== "undefined" && crypto.randomUUID) pendingSubId = crypto.randomUUID();
+    } catch (err) { pendingSubId = ""; }
+    if (!pendingSubId) pendingSubId = "s" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+    return pendingSubId;
   }
 
   function setPostStatus(kind, text) {
@@ -1194,7 +1271,7 @@
 
   function postResults(payload) {
     if (!ENDPOINT) {
-      setPostStatus("idle", "No server endpoint configured yet (ENDPOINT is empty in assets/app.js) \u2014 the CSV above already holds this result.");
+      setPostStatus("idle", "No server endpoint configured yet (add window.TONE_TEST_ENDPOINT = \"\u2026/exec\" to assets/config.js) \u2014 the CSV above already holds this result.");
       return Promise.resolve({ ok: false, skipped: true });
     }
 
@@ -1202,38 +1279,83 @@
 
     // text/plain keeps this a "simple request", so Google Apps Script answers
     // without a CORS preflight. The body is still plain JSON.
+    // keepalive lets the request finish even if the page navigates to the next
+    // test — without it, Pilot's upload dies the moment Main opens.
     const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 15000) : null;
+    const timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 25000) : null;
 
     return fetch(ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify(payload),
       redirect: "follow",
+      keepalive: true,
       signal: ctrl ? ctrl.signal : undefined
     })
       .then(function (res) {
         return res.text().then(function (text) {
-          let ok = res.ok;
-          let detail = text;
-          try {
-            const json = JSON.parse(text);
-            if (json && json.ok === false) ok = false;
-            if (json && json.rows !== undefined) detail = json.rows + " row(s) written";
-            else if (json && json.message) detail = json.message;
-          } catch (err) { /* not JSON — keep the raw text */ }
+          const raw = String(text || "");
+          const head = raw.trim().charAt(0);
 
-          if (!ok) throw new Error(detail || ("HTTP " + res.status));
-          setPostStatus("ok", "Results sent to the server (" + detail + ").");
+          // A web app answers a POST with a redirect. If the deployment is not
+          // shared with "Anyone" (or this browser is signed in with a different
+          // Google account than the sheet owner), that redirect lands on a
+          // sign-in page: HTTP 200, HTML. Treating that as success silently
+          // loses the whole run, so fail loudly instead.
+          if (head === "<") {
+            throw new Error("Google returned a sign-in / error page instead of a result. " +
+              "Most likely the deployment is not shared with \"Anyone\", or this browser " +
+              "is signed in with a Google account different from the sheet owner.");
+          }
+
+          let data = null;
+          try { data = JSON.parse(raw); } catch (err) { data = null; }
+
+          if (!data) {
+            throw new Error("Unexpected reply from the server: " +
+              raw.replace(/\s+/g, " ").trim().slice(0, 120));
+          }
+          if (data.ok === false) {
+            throw new Error(data.error || data.message || ("HTTP " + res.status));
+          }
+
+          const written = data.duplicate
+            ? "already stored, not written twice"
+            : (data.rows !== undefined ? data.rows + " row(s) written" : "ok");
+          const where = data.spreadsheet ? " \u2192 " + data.spreadsheet : "";
+          setPostStatus("ok", "Results sent to the server (" + written + where + ").");
           return { ok: true };
         });
       })
       .catch(function (err) {
-        const msg = (err && err.name === "AbortError")
-          ? "the request timed out after 15 seconds"
+        let msg = (err && err.name === "AbortError")
+          ? "no reply within 25 seconds"
           : (err && err.message ? err.message : String(err));
-        setPostStatus("err", "Could not reach the server: " + msg +
-          " \u2014 the CSV above is still complete, so nothing is lost.");
+
+        // "Failed to fetch" is what a blocked / redirected reply looks like
+        // from the page: it hides the real reason, so spell out the usual ones.
+        if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) {
+          msg += " (the browser blocked the reply — check that the /exec URL is exact " +
+            "and that the deployment is shared with \"Anyone\")";
+        }
+        setPostStatus("err", "Could not send to the server: " + msg + " [" + endpointHost() + " \u00b7 " + BUILD + "]" +
+          " \u2014 the CSV above is complete, so this run is not lost. " +
+          "If it keeps failing, open the /exec?diag=1 URL in a browser.");
+
+        // Carry the warning to the next page: the student may already have
+        // moved on before anyone read this line.
+        try {
+          sessionStorage.setItem("tpUploadFailed", JSON.stringify({ test: TEST_TYPE, message: msg, at: new Date().toISOString() }));
+        } catch (e) { /* storage disabled — the CSV is still on disk */ }
+
+        // Best-effort insurance: fire the same payload again in the background.
+        // The payload carries a subId, so the script drops the second copy.
+        try {
+          if (navigator.sendBeacon) {
+            navigator.sendBeacon(ENDPOINT, new Blob([JSON.stringify(payload)], { type: "text/plain;charset=utf-8" }));
+          }
+        } catch (e) { /* ignore */ }
+
         return { ok: false, error: String(err) };
       })
       .then(function (result) {

@@ -40,7 +40,7 @@
   })();
 
   /* Shown only when an upload fails, so a screenshot tells us which build ran. */
-  const BUILD = "v2.3-2026-10-29";
+  const BUILD = "v2.5-2026-10-29";
 
   function endpointHost() {
     if (!ENDPOINT) return "(none)";
@@ -251,13 +251,18 @@
     const q = parseQuery();
     let name = q.name;
     let major = q.major;
+    let session = q.session;
+    let listen = q.listen;
+    let answer = q.answer;
 
-    if (!name || !major) {
+    if (!name || !major || !listen || !answer) {
       try {
         const saved = JSON.parse(sessionStorage.getItem(NAME_STORAGE) || "null");
-        if (saved && saved.name && saved.major) {
+        if (saved) {
           name = name || saved.name;
           major = major || saved.major;
+          listen = listen || saved.listen;
+          answer = answer || saved.answer;
         }
       } catch (err) { /* ignore */ }
     }
@@ -269,12 +274,12 @@
     if (!CFG_ITEMS.length) return;
 
     if (audioReady()) {
-      beginSession(name, major);
+      beginSession(name, major, { session: session, listen: listen, answer: answer });
     }
   }
 
   function parseQuery() {
-    const out = { name: "", major: "", from: "" };
+    const out = { name: "", major: "", from: "", session: "", listen: "", answer: "" };
     const search = String(window.location.search || "").replace(/^\?/, "");
     if (!search) return out;
     search.split("&").forEach(function (pair) {
@@ -282,7 +287,8 @@
       const k = decodeURIComponent(bits[0] || "");
       let v = (bits[1] || "").replace(/\+/g, " ");
       try { v = decodeURIComponent(v); } catch (err) { /* keep raw */ }
-      if (k === "name" || k === "major" || k === "from") out[k] = v;
+      if (Object.prototype.hasOwnProperty.call(out, k) && k !== "from") out[k] = v;
+      if (k === "from") out.from = v;
     });
     return out;
   }
@@ -550,18 +556,37 @@
       return;
     }
 
-    beginSession(name, major);
+    // Started from this page's own form (not handed over from the entry page):
+    // keep whatever session / device info the URL or the last run carried.
+    const q = parseQuery();
+    let saved = null;
+    try { saved = JSON.parse(sessionStorage.getItem(NAME_STORAGE) || "null"); } catch (err) { saved = null; }
+    beginSession(name, major, {
+      session: q.session || (saved && saved.session) || "1",
+      listen: q.listen || (saved && saved.listen) || "",
+      answer: q.answer || (saved && saved.answer) || ""
+    });
   }
 
-  function beginSession(name, major) {
+  function beginSession(name, major, extras) {
     buildItems();
-    state.student = { name: name, major: major };
+    const e = extras || {};
+    state.student = {
+      name: name,
+      major: major,
+      session: String(e.session || "1").trim() || "1",
+      listen: String(e.listen || "").trim(),
+      answer: String(e.answer || "").trim()
+    };
     state.pos = 0;
     state.phase = "test";
     state.qStart = performance.now();
 
     try {
-      sessionStorage.setItem(NAME_STORAGE, JSON.stringify({ name: name, major: major }));
+      sessionStorage.setItem(NAME_STORAGE, JSON.stringify({
+        name: name, major: major, session: state.student.session,
+        listen: state.student.listen, answer: state.student.answer
+      }));
     } catch (err) { /* ignore */ }
 
     els.whoMeta.textContent = name + "  \u00B7  " + major + "  \u00B7  " + TYPE_LABEL;
@@ -594,7 +619,13 @@
     });
 
     if (SHUFFLE) items = shuffle(items);
-    items.forEach(function (it, i) { it.n = i + 1; });
+
+    /* n = the item's ORIGINAL position in config.js — never changes, so two
+       students who saw the same audio file still report the same question
+       number. shownAs = the position this student actually saw it in.
+       Writing the shown position into "question" would make per-item analysis
+       meaningless as soon as shuffleItems is true. */
+    items.forEach(function (it, i) { it.shownAs = i + 1; });
     state.items = items;
   }
 
@@ -1049,6 +1080,9 @@
     const q = [];
     q.push("name=" + encodeURIComponent(state.student.name));
     q.push("major=" + encodeURIComponent(state.student.major));
+    q.push("session=" + encodeURIComponent(state.student.session));
+    q.push("listen=" + encodeURIComponent(state.student.listen));
+    q.push("answer=" + encodeURIComponent(state.student.answer));
     q.push("from=" + encodeURIComponent(TEST_TYPE));
 
     window.location.href = NEXT_PAGE + "?" + q.join("&");
@@ -1076,6 +1110,7 @@
 
           rows.push({
             question: item.n,
+            shownAs: item.shownAs || item.n,
             syllable: st.syll,
             audioFile: g.file || "",
             response: answered ? st.choice : "",
@@ -1177,7 +1212,9 @@
     const ts = stamp(now);
 
     const header = [
-      "Timestamp", "Test Type", "Student Name", "Major", "Question", "Syllable", "Audio File",
+      "Timestamp", "Test Type", "Student Name", "Major", "Session",
+      "Listening Device", "Answering Device",
+      "Question", "Shown As", "Syllable", "Audio File",
       "Response", "Response Label", "Answer Key", "Answer Key Label",
       "Correct (1/0)", "Result", "Plays Used", "Time on Item (s)"
     ];
@@ -1185,14 +1222,18 @@
     const rows = [header];
     s.rows.forEach(function (r) {
       rows.push([
-        ts, TEST_TYPE, state.student.name, state.student.major, r.question, r.syllable, r.audioFile,
+        ts, TEST_TYPE, state.student.name, state.student.major, state.student.session,
+        state.student.listen, state.student.answer,
+        r.question, r.shownAs, r.syllable, r.audioFile,
         r.response, r.responseLabel, r.answerKey, r.answerKeyLabel,
         r.correct, r.result, r.playsUsed, r.timeSeconds
       ]);
     });
 
     rows.push([
-      ts, TEST_TYPE, state.student.name, state.student.major, "TOTAL", "", "",
+      ts, TEST_TYPE, state.student.name, state.student.major, state.student.session,
+      state.student.listen, state.student.answer,
+      "TOTAL", "", "", "",
       s.answered, "", "", "",
       s.correctCount, s.percent === null ? "Not scored" : s.percent + "%", "", ""
     ]);
@@ -1240,6 +1281,9 @@
       testLabel: TYPE_LABEL,
       studentName: state.student.name,
       major: state.student.major,
+      session: state.student.session,
+      listenDevice: state.student.listen,
+      answerDevice: state.student.answer,
       submittedAt: new Date().toISOString(),
       maxPlays: MAX_PLAYS,
       totalItems: s.total,
@@ -1282,7 +1326,9 @@
     // keepalive lets the request finish even if the page navigates to the next
     // test — without it, Pilot's upload dies the moment Main opens.
     const ctrl = (typeof AbortController !== "undefined") ? new AbortController() : null;
-    const timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 25000) : null;
+    // 40 s: a whole class can finish within the same minute, and each upload
+    // waits its turn behind the server's write lock (up to 25 s there).
+    const timer = ctrl ? setTimeout(function () { ctrl.abort(); }, 40000) : null;
 
     return fetch(ENDPOINT, {
       method: "POST",
@@ -1316,7 +1362,9 @@
               raw.replace(/\s+/g, " ").trim().slice(0, 120));
           }
           if (data.ok === false) {
-            throw new Error(data.error || data.message || ("HTTP " + res.status));
+            const e = new Error(data.error || data.message || ("HTTP " + res.status));
+            e.busy = data.busy === true || data.retryable === true;
+            throw e;
           }
 
           const written = data.duplicate
@@ -1329,8 +1377,13 @@
       })
       .catch(function (err) {
         let msg = (err && err.name === "AbortError")
-          ? "no reply within 25 seconds"
+          ? "no reply within 40 seconds"
           : (err && err.message ? err.message : String(err));
+
+        if (err && err.busy) {
+          msg = "the server was busy (several tests arrived at the same moment) \u2014 " +
+            "retrying automatically in the background";
+        }
 
         // "Failed to fetch" is what a blocked / redirected reply looks like
         // from the page: it hides the real reason, so spell out the usual ones.
@@ -1338,15 +1391,21 @@
           msg += " (the browser blocked the reply — check that the /exec URL is exact " +
             "and that the deployment is shared with \"Anyone\")";
         }
-        setPostStatus("err", "Could not send to the server: " + msg + " [" + endpointHost() + " \u00b7 " + BUILD + "]" +
+        setPostStatus(err && err.busy ? "pending" : "err",
+          (err && err.busy ? "Waiting for the server: " : "Could not send to the server: ") + msg +
+          " [" + endpointHost() + " \u00b7 " + BUILD + "]" +
           " \u2014 the CSV above is complete, so this run is not lost. " +
           "If it keeps failing, open the /exec?diag=1 URL in a browser.");
 
         // Carry the warning to the next page: the student may already have
-        // moved on before anyone read this line.
-        try {
-          sessionStorage.setItem("tpUploadFailed", JSON.stringify({ test: TEST_TYPE, message: msg, at: new Date().toISOString() }));
-        } catch (e) { /* storage disabled — the CSV is still on disk */ }
+        // moved on before anyone read this line. A "busy" reply is not a
+        // failure yet (a retry is already in flight), so it is not carried
+        // over — otherwise every student would see a red banner.
+        if (!(err && err.busy)) {
+          try {
+            sessionStorage.setItem("tpUploadFailed", JSON.stringify({ test: TEST_TYPE, message: msg, at: new Date().toISOString() }));
+          } catch (e) { /* storage disabled — the CSV is still on disk */ }
+        }
 
         // Best-effort insurance: fire the same payload again in the background.
         // The payload carries a subId, so the script drops the second copy.

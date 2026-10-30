@@ -8,7 +8,7 @@
    Leave it "" and the page skips the upload (the CSV download still works).
    ========================================================================== */
 
-window.TONE_TEST_ENDPOINT = "";
+window.TONE_TEST_ENDPOINT = "https://script.google.com/macros/s/AKfycbwsjJ1TEoAXG3UM0IQBeEnatpBRNcrLE8jrS4lTznQqA90Bu6yX2MWb5FPfGwWQr8Bw/exec";
 
 const SETTINGS = {
   /* How many times a single item may be replayed. */

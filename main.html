@@ -45,6 +45,27 @@
           <label for="majorInput">Major <span class="req">*</span></label>
           <input id="majorInput" name="major" type="text" autocomplete="off" required placeholder="e.g. Teaching Chinese as a Foreign Language" />
         </div>
+        <div class="field">
+          <label for="nationalityInput">Nationality <span class="req">*</span></label>
+          <input id="nationalityInput" name="nationality" type="text" autocomplete="country-name" required placeholder="e.g. Thailand" />
+        </div>
+        <div class="field">
+          <label for="yearsSelect">Time studying Chinese <span class="req">*</span></label>
+          <select id="yearsSelect" name="yearsStudy" required>
+            <option value="">Select duration</option>
+            <option>1-3 months</option>
+            <option>3-6 months</option>
+            <option>6-12 months</option>
+            <option>1-3 years</option>
+            <option>3-5 years</option>
+            <option>5-10 years</option>
+            <option>More than 10 years</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="hskInput">HSK score <span class="opt">(optional)</span></label>
+          <input id="hskInput" name="hsk" type="text" autocomplete="off" placeholder="e.g. HSK 5 (210)" />
+        </div>
         <p class="form-error" id="formError" role="alert" hidden></p>
         <div>
           <button class="btn btn-primary btn-lg" id="startBtn" type="submit">Start Main Test</button>

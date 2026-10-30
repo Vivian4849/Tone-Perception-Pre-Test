@@ -48,6 +48,27 @@
         <input id="majorInput" name="major" type="text" autocomplete="off" required placeholder="e.g. Teaching Chinese as a Foreign Language" />
       </div>
       <div class="field">
+        <label for="nationalityInput">Nationality <span class="req">*</span></label>
+        <input id="nationalityInput" name="nationality" type="text" autocomplete="country-name" required placeholder="e.g. Thailand" />
+      </div>
+      <div class="field">
+        <label for="yearsSelect">Time studying Chinese <span class="req">*</span></label>
+        <select id="yearsSelect" name="yearsStudy" required>
+          <option value="">Select duration</option>
+          <option>1-3 months</option>
+          <option>3-6 months</option>
+          <option>6-12 months</option>
+          <option>1-3 years</option>
+          <option>3-5 years</option>
+          <option>5-10 years</option>
+          <option>More than 10 years</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="hskInput">HSK score <span class="opt">(optional)</span></label>
+        <input id="hskInput" name="hsk" type="text" autocomplete="off" placeholder="e.g. HSK 5 (210)" />
+      </div>
+      <div class="field">
         <label for="listenSelect">Listening device <span class="req">*</span></label>
         <select id="listenSelect" name="listenDevice" required>
           <option value="">Select your earphones / speaker</option>
@@ -86,6 +107,9 @@
   var form = document.getElementById("startForm");
   var nameInput = document.getElementById("nameInput");
   var majorInput = document.getElementById("majorInput");
+  var nationalityInput = document.getElementById("nationalityInput");
+  var yearsSelect = document.getElementById("yearsSelect");
+  var hskInput = document.getElementById("hskInput");
   var listenSelect = document.getElementById("listenSelect");
   var answerSelect = document.getElementById("answerSelect");
   var sessionChip = document.getElementById("sessionChip");
@@ -117,12 +141,16 @@
     if (saved && saved.name && saved.major) {
       nameInput.value = saved.name;
       majorInput.value = saved.major;
+      if (saved.nationality && nationalityInput) nationalityInput.value = saved.nationality;
+      if (saved.years && yearsSelect) yearsSelect.value = saved.years;
+      if (saved.hsk && hskInput) hskInput.value = saved.hsk;
       if (saved.listen) listenSelect.value = saved.listen;
       if (saved.answer) answerSelect.value = saved.answer;
     }
   } catch (err) { /* first visit */ }
 
-  [nameInput, majorInput, listenSelect, answerSelect].forEach(function (input) {
+  [nameInput, majorInput, nationalityInput, yearsSelect, hskInput, listenSelect, answerSelect].forEach(function (input) {
+    if (!input) return;
     input.addEventListener("input", function () {
       if (!error.hidden) error.hidden = true;
     });
@@ -136,14 +164,26 @@
 
     var name = nameInput.value.trim();
     var major = majorInput.value.trim();
+    var nationality = nationalityInput ? nationalityInput.value.trim() : "";
+    var years = yearsSelect ? yearsSelect.value : "";
+    var hsk = hskInput ? hskInput.value.trim() : "";
     var listen = listenSelect.value;
     var answer = answerSelect.value;
 
-    if (!name || !major || !listen || !answer) {
+    if (!name || !major || !nationality || !years || !listen || !answer) {
       error.hidden = false;
-      if (!name || !major) {
-        error.textContent = "Please fill in both Student Name and Major before starting.";
-        (!name ? nameInput : majorInput).focus();
+      if (!name) {
+        error.textContent = "Please enter your name before starting.";
+        nameInput.focus();
+      } else if (!major) {
+        error.textContent = "Please enter your major before starting.";
+        majorInput.focus();
+      } else if (!nationality) {
+        error.textContent = "Please enter your nationality before starting.";
+        nationalityInput.focus();
+      } else if (!years) {
+        error.textContent = "Please choose how long you have studied Chinese.";
+        yearsSelect.focus();
       } else if (!listen) {
         error.textContent = "Please choose what you are listening with.";
         listenSelect.focus();
@@ -156,13 +196,17 @@
 
     try {
       sessionStorage.setItem("ttp.student", JSON.stringify({
-        name: name, major: major, listen: listen, answer: answer
+        name: name, major: major, nationality: nationality, years: years, hsk: hsk,
+        listen: listen, answer: answer
       }));
     } catch (err) { /* storage blocked — the URL still carries the values */ }
 
     startBtn.disabled = true;
     var q = "?name=" + encodeURIComponent(name) +
       "&major=" + encodeURIComponent(major) +
+      "&nat=" + encodeURIComponent(nationality) +
+      "&years=" + encodeURIComponent(years) +
+      "&hsk=" + encodeURIComponent(hsk) +
       "&session=" + encodeURIComponent(session) +
       "&listen=" + encodeURIComponent(listen) +
       "&answer=" + encodeURIComponent(answer) +

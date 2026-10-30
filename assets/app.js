@@ -40,7 +40,7 @@
   })();
 
   /* Shown only when an upload fails, so a screenshot tells us which build ran. */
-  const BUILD = "v2.5-2026-10-29";
+  const BUILD = "v2.6-2026-10-30";
 
   function endpointHost() {
     if (!ENDPOINT) return "(none)";
@@ -105,8 +105,13 @@
     blockEls: [],            // [{ group, stim, el }]  for the current item
     playerUI: [],            // [{ g, btn, status, hint, count }]
     playingGroup: null,
+    preparingGroup: null,    // clicked, but the file is still loading
+    audioSrc: "",            // what the shared <audio> element currently holds
+    waitCleanup: null,       // cancels the "wait for canplay" listeners
     playTimer: null,
     audio: null,
+    prefetch: null,
+    prefetchSrc: "",
     submitted: false,
     postSettled: false,
     postOk: null,
@@ -154,6 +159,9 @@
     els.form = $("startForm");
     els.nameInput = $("nameInput");
     els.majorInput = $("majorInput");
+    els.nationalityInput = $("nationalityInput");
+    els.yearsSelect = $("yearsSelect");
+    els.hskInput = $("hskInput");
     els.formError = $("formError");
     els.startBtn = $("startBtn");
 
@@ -206,8 +214,12 @@
 
     els.form.addEventListener("submit", onStart);
 
-    [els.nameInput, els.majorInput].forEach(function (input) {
+    [els.nameInput, els.majorInput, els.nationalityInput, els.yearsSelect, els.hskInput].forEach(function (input) {
+      if (!input) return;
       input.addEventListener("input", function () {
+        if (!els.formError.hidden) els.formError.hidden = true;
+      });
+      input.addEventListener("change", function () {
         if (!els.formError.hidden) els.formError.hidden = true;
       });
     });
@@ -254,6 +266,9 @@
     let session = q.session;
     let listen = q.listen;
     let answer = q.answer;
+    let nationality = q.nat;
+    let years = q.years;
+    let hsk = q.hsk;
 
     if (!name || !major || !listen || !answer) {
       try {
@@ -263,23 +278,32 @@
           major = major || saved.major;
           listen = listen || saved.listen;
           answer = answer || saved.answer;
+          nationality = nationality || saved.nationality;
+          years = years || saved.years;
+          hsk = hsk || saved.hsk;
         }
       } catch (err) { /* ignore */ }
     }
 
     if (name) els.nameInput.value = name;
     if (major) els.majorInput.value = major;
+    if (nationality && els.nationalityInput) els.nationalityInput.value = nationality;
+    if (years && els.yearsSelect) els.yearsSelect.value = years;
+    if (hsk && els.hskInput) els.hskInput.value = hsk;
 
     if (!name || !major) return;
     if (!CFG_ITEMS.length) return;
 
     if (audioReady()) {
-      beginSession(name, major, { session: session, listen: listen, answer: answer });
+      beginSession(name, major, {
+        session: session, listen: listen, answer: answer,
+        nationality: nationality, years: years, hsk: hsk
+      });
     }
   }
 
   function parseQuery() {
-    const out = { name: "", major: "", from: "", session: "", listen: "", answer: "" };
+    const out = { name: "", major: "", from: "", session: "", listen: "", answer: "", nat: "", years: "", hsk: "" };
     const search = String(window.location.search || "").replace(/^\?/, "");
     if (!search) return out;
     search.split("&").forEach(function (pair) {
@@ -541,11 +565,25 @@
 
     const name = els.nameInput.value.trim();
     const major = els.majorInput.value.trim();
+    const nationality = els.nationalityInput ? els.nationalityInput.value.trim() : "";
+    const years = els.yearsSelect ? els.yearsSelect.value : "";
+    const hsk = els.hskInput ? els.hskInput.value.trim() : "";
 
-    if (!name || !major) {
+    if (!name || !major || (els.nationalityInput && !nationality) || (els.yearsSelect && !years)) {
       els.formError.hidden = false;
-      els.formError.textContent = "Please fill in both Student Name and Major before starting.";
-      (!name ? els.nameInput : els.majorInput).focus();
+      if (!name) {
+        els.formError.textContent = "Please enter your name before starting.";
+        els.nameInput.focus();
+      } else if (!major) {
+        els.formError.textContent = "Please enter your major before starting.";
+        els.majorInput.focus();
+      } else if (els.nationalityInput && !nationality) {
+        els.formError.textContent = "Please enter your nationality before starting.";
+        els.nationalityInput.focus();
+      } else {
+        els.formError.textContent = "Please choose how long you have studied Chinese.";
+        els.yearsSelect.focus();
+      }
       return;
     }
     els.formError.hidden = true;
@@ -564,7 +602,10 @@
     beginSession(name, major, {
       session: q.session || (saved && saved.session) || "1",
       listen: q.listen || (saved && saved.listen) || "",
-      answer: q.answer || (saved && saved.answer) || ""
+      answer: q.answer || (saved && saved.answer) || "",
+      nationality: nationality || q.nat || (saved && saved.nationality) || "",
+      years: years || q.years || (saved && saved.years) || "",
+      hsk: hsk || q.hsk || (saved && saved.hsk) || ""
     });
   }
 
@@ -576,7 +617,10 @@
       major: major,
       session: String(e.session || "1").trim() || "1",
       listen: String(e.listen || "").trim(),
-      answer: String(e.answer || "").trim()
+      answer: String(e.answer || "").trim(),
+      nationality: String(e.nationality || "").trim(),
+      years: String(e.years || "").trim(),
+      hsk: String(e.hsk || "").trim()
     };
     state.pos = 0;
     state.phase = "test";
@@ -585,7 +629,8 @@
     try {
       sessionStorage.setItem(NAME_STORAGE, JSON.stringify({
         name: name, major: major, session: state.student.session,
-        listen: state.student.listen, answer: state.student.answer
+        listen: state.student.listen, answer: state.student.answer,
+        nationality: state.student.nationality, years: state.student.years, hsk: state.student.hsk
       }));
     } catch (err) { /* ignore */ }
 
@@ -705,6 +750,12 @@
     const firstUnanswered = state.blockEls.findIndex(function (b) { return b.stim.choice < 1; });
     state.active = firstUnanswered >= 0 ? firstUnanswered : 0;
 
+    // Drop any half-finished "waiting for the file" from the previous item, then
+    // start buffering this item's sound in the background.
+    cancelPendingPlay();
+    warmAudio(item.groups[0] && item.groups[0].src);
+    prefetchNextItem();
+
     paintBlocks();
     updatePlayers();
     updateNav();
@@ -822,14 +873,19 @@
       const grp = ui.g;
       const left = Math.max(0, MAX_PLAYS - grp.plays);
       const playing = state.playingGroup === grp;
+      const loading = state.preparingGroup === grp;
 
       ui.count.textContent = grp.plays + " / " + MAX_PLAYS;
-      // While the sound is playing the button does nothing (a second click is
-      // ignored), so disable it — otherwise it looks clickable and feels broken.
+      // While the sound is playing (or still loading) the button does nothing
+      // (a second click is ignored), so disable it — otherwise it looks
+      // clickable and feels broken.
       ui.btn.disabled = left === 0 || !grp.src || playing;
       ui.btn.classList.toggle("is-playing", playing);
 
-      if (playing) {
+      if (loading) {
+        ui.status.textContent = "Loading\u2026";
+        ui.hint.textContent = "Getting the sound ready \u2014 it will start by itself.";
+      } else if (playing) {
         ui.status.textContent = "Playing\u2026";
         ui.hint.textContent = "Listen carefully.";
       } else if (!grp.src) {
@@ -889,51 +945,127 @@
     updateNav();
   }
 
+  function ensureAudio() {
+    if (state.audio) return state.audio;
+    state.audio = new Audio();
+    state.audio.preload = "auto";
+    state.audio.addEventListener("ended", onPlayEnd);
+    state.audio.addEventListener("error", function () {
+      onPlayEnd();
+      toast("That audio file could not be loaded. Check the path or file name.");
+    });
+    return state.audio;
+  }
+
+  /**
+   * Point the shared element at a file WITHOUT playing it, so the bytes are
+   * already decoded when the student taps play. Called on every new item:
+   * without this, the first play of an item starts on a cold element and the
+   * browser drops the first few dozen milliseconds — which is exactly the
+   * consonant at the start of a syllable.
+   */
+  function warmAudio(src) {
+    if (!src) return;
+    if (state.audioSrc === src) return;
+    if (state.playingGroup || state.preparingGroup) return;  // never cut a sound short
+    const el = ensureAudio();
+    state.audioSrc = src;
+    el.src = src;
+    try { el.load(); } catch (err) { /* ignore */ }
+  }
+
+  function cancelPendingPlay() {
+    if (state.waitCleanup) { state.waitCleanup(); state.waitCleanup = null; }
+    state.preparingGroup = null;
+  }
+
+  /**
+   * Quietly download the NEXT item's sound while the student is answering this
+   * one, so tapping play on the next item is instant instead of showing
+   * "Loading…". One detached element, one file — replaced on every item.
+   */
+  function prefetchNextItem() {
+    const next = state.items[state.pos + 1];
+    const src = next && next.groups[0] && next.groups[0].src;
+    if (!src || state.prefetchSrc === src) return;
+    state.prefetchSrc = src;
+    try {
+      state.prefetch = new Audio();
+      state.prefetch.preload = "auto";
+      state.prefetch.src = src;
+      state.prefetch.load();
+    } catch (err) { /* prefetch is a bonus — never let it break the test */ }
+  }
+
   function playGroup(g) {
     if (!g) return;
     if (!g.src) { toast("No audio file is attached to this item."); return; }
     if (g.plays >= MAX_PLAYS) { toast("You have already used all " + MAX_PLAYS + " plays for this sound."); return; }
-    if (state.playingGroup === g) return;
+    if (state.playingGroup === g || state.preparingGroup === g) return;
 
-    if (!state.audio) {
-      state.audio = new Audio();
-      state.audio.preload = "auto";
-      state.audio.addEventListener("ended", onPlayEnd);
-      state.audio.addEventListener("error", function () {
-        onPlayEnd();
-        toast("That audio file could not be loaded. Check the path or file name.");
-      });
+    const el = ensureAudio();
+    try { el.pause(); } catch (err) { /* first play — nothing to pause */ }
+
+    // A different file than the one already buffered: load it first.
+    if (state.audioSrc !== g.src) {
+      state.audioSrc = g.src;
+      el.src = g.src;
+      try { el.load(); } catch (err) { /* ignore */ }
     }
-
-    try { state.audio.pause(); } catch (err) { /* first play — nothing to pause */ }
 
     state.playingGroup = g;
+    state.preparingGroup = g;
     updatePlayers();
 
-    state.audio.src = g.src;
-    try { state.audio.currentTime = 0; } catch (err) { /* not seekable yet */ }
+    let cleanup = function () {};
+    const start = function () {
+      cleanup();
+      state.waitCleanup = null;
+      if (state.preparingGroup !== g) return;   // the student moved on meanwhile
+      // Rewind only now: a seek to 0 issued before metadata has arrived can
+      // land after the true start of the file.
+      try { el.currentTime = 0; } catch (err) { /* ignore */ }
 
-    const p = state.audio.play();
-    if (p && typeof p.then === "function") {
-      p.then(function () {
-        g.plays += 1;
-        updatePlayers();
-        clearTimeout(state.playTimer);
-        // Safety net: never leave the button locked if "ended" does not fire.
-        state.playTimer = setTimeout(onPlayEnd, 30000);
-      }).catch(function () {
-        onPlayEnd();
-        toast("Playback was blocked. Click the play button once more.");
-      });
-    } else {
-      g.plays += 1;
-      updatePlayers();
-    }
+      const p = el.play();
+      if (p && typeof p.then === "function") {
+        p.then(function () { onPlayStarted(g); }).catch(function () {
+          state.preparingGroup = null;
+          onPlayEnd();
+          toast("Playback was blocked. Click the play button once more.");
+        });
+      } else {
+        onPlayStarted(g);
+      }
+    };
+
+    // HAVE_FUTURE_DATA (3) means the browser is confident it can keep playing.
+    if (el.readyState >= 3) { start(); return; }
+
+    const timer = setTimeout(function () { start(); }, 8000);   // never hang forever
+    const onReady = function () { start(); };
+    cleanup = function () {
+      clearTimeout(timer);
+      el.removeEventListener("canplay", onReady);
+    };
+    state.waitCleanup = cleanup;
+    // "canplay" == readyState 3 (HAVE_FUTURE_DATA): enough decoded audio to
+    // start without dropping the first syllable.
+    el.addEventListener("canplay", onReady);
+  }
+
+  function onPlayStarted(g) {
+    state.preparingGroup = null;
+    g.plays += 1;
+    updatePlayers();
+    clearTimeout(state.playTimer);
+    // Safety net: never leave the button locked if "ended" does not fire.
+    state.playTimer = setTimeout(onPlayEnd, 30000);
   }
 
   function onPlayEnd() {
     clearTimeout(state.playTimer);
     state.playingGroup = null;
+    state.preparingGroup = null;
     updatePlayers();
   }
 
@@ -1080,6 +1212,9 @@
     const q = [];
     q.push("name=" + encodeURIComponent(state.student.name));
     q.push("major=" + encodeURIComponent(state.student.major));
+    q.push("nat=" + encodeURIComponent(state.student.nationality));
+    q.push("years=" + encodeURIComponent(state.student.years));
+    q.push("hsk=" + encodeURIComponent(state.student.hsk));
     q.push("session=" + encodeURIComponent(state.student.session));
     q.push("listen=" + encodeURIComponent(state.student.listen));
     q.push("answer=" + encodeURIComponent(state.student.answer));
@@ -1214,6 +1349,7 @@
     const header = [
       "Timestamp", "Test Type", "Student Name", "Major", "Session",
       "Listening Device", "Answering Device",
+      "Nationality", "Time Studying Chinese", "HSK Score",
       "Question", "Shown As", "Syllable", "Audio File",
       "Response", "Response Label", "Answer Key", "Answer Key Label",
       "Correct (1/0)", "Result", "Plays Used", "Time on Item (s)"
@@ -1224,6 +1360,7 @@
       rows.push([
         ts, TEST_TYPE, state.student.name, state.student.major, state.student.session,
         state.student.listen, state.student.answer,
+        state.student.nationality, state.student.years, state.student.hsk,
         r.question, r.shownAs, r.syllable, r.audioFile,
         r.response, r.responseLabel, r.answerKey, r.answerKeyLabel,
         r.correct, r.result, r.playsUsed, r.timeSeconds
@@ -1233,6 +1370,7 @@
     rows.push([
       ts, TEST_TYPE, state.student.name, state.student.major, state.student.session,
       state.student.listen, state.student.answer,
+      state.student.nationality, state.student.years, state.student.hsk,
       "TOTAL", "", "", "",
       s.answered, "", "", "",
       s.correctCount, s.percent === null ? "Not scored" : s.percent + "%", "", ""
@@ -1284,6 +1422,9 @@
       session: state.student.session,
       listenDevice: state.student.listen,
       answerDevice: state.student.answer,
+      nationality: state.student.nationality,
+      yearsStudy: state.student.years,
+      hsk: state.student.hsk,
       submittedAt: new Date().toISOString(),
       maxPlays: MAX_PLAYS,
       totalItems: s.total,

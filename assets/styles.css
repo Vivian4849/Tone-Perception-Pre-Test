@@ -225,6 +225,13 @@ kbd {
 
 .req { color: var(--accent); }
 
+.opt {
+  font-weight: 500;
+  color: var(--ink-3, #8a857c);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .field input {
   width: 100%;
   padding: 13px 15px;
